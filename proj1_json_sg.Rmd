@@ -1,30 +1,159 @@
 ---
-title: "proj1_json_sg"
+title: "Project 1 - Sushil Gupta"
 author: "Sushil Gupta"
 date: "11/16/2019"
-output: html_document
+output: 
+  html_document:
+    toc: true
+    toc_float: true
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(jsonlite)
+library(ggplot2)
+library(knitr)
+library(dplyr)
+library(tidyr)
+setwd("C:\\Users\\sugupt\\OneDrive - SAS\\00 sas sushil\\personal\\00_SushilGupta\\MasterStats_sg\\201908_ST_558_DataScienceForStatistician\\Project1")
 ```
 
-## R Markdown
+# Project 1 - JSON data for Greenhouse Gas Emissions Inventory
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+The Greenhouse Gas Emissions Inventory details the estimated New York State emissions releases from fuel combustion. The dataset includes a fuel type breakdown, by sector, for the current year. The data was obtained from [*this website*](https://catalog.data.gov/dataset/greenhouse-gas-emissions-from-fuel-combustion-by-fuel-type-million-metric-tons).
+. 
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+## What is JSON data?
+JSON stands for **JavaScript Object Notation** and it’s a data format. It is, simply, a way to hold bits of information, similar to a database.It is used primarily **to transmit data between a server and web application**, as an alternative to XML. 
+JSON is a data format that consists of **name/value pairs** (AKA key/value pairs) in the form of strings. The name/value pairs are separated by a colon and each pair is separated by a comma. 
+Features/Advantages of JSON:
 
-```{r cars}
-summary(cars)
+  *  It is light-weight
+  *  It is language independent
+  *  Easy to read and write
+  *  Text based, human readable data exchange format
+
+For more information on JSON format, please go through the [wikipedia page](https://en.wikipedia.org/wiki/JSON). A good beginners tutorial on JSON can be [found here](https://www.w3schools.com/js/js_json_intro.asp). 
+
+## R Packages to read JSON data
+The following packages are available. 
+
+  *  **rjson** - it seemed more like interacting with JSON object at object levels. 
+  *  **RJSONIO** - This is a package that allows conversion to and from data in Javascript object notation (JSON) format.I tried using it but couldnt make it to work.
+  *  **jsonlite** - A fast JSON parser and generator optimized for statistical data and the web. Started out as a fork of 'RJSONIO', but has been completely rewritten in recent versions.I used this to read JSON data.  
+  
+For more information on jsonlite package, refer to its [CRAN documentation](https://cran.r-project.org/web/packages/jsonlite/jsonlite.pdf).
+
+## Read emissions data - jsonlite
+```{r read_JSON_data}
+# READ JSON DATA
+emi_json1 <- fromJSON("C:\\Users\\sugupt\\OneDrive - SAS\\00 sas sushil\\personal\\00_SushilGupta\\MasterStats_sg\\201908_ST_558_DataScienceForStatistician\\Project1\\emmission_rows.json", flatten=TRUE)
+
+#EXTRACT DATA TABLE FROM JSON DATA
+emi_json_data <- emi_json1$data
+
+#ASSIGN COLUMN NAMES 
+colnames(emi_json_data)<-emi_json1$meta$view$columns$name
+
+#TRANSFORM COLUMNS
+emi_json_data_1 <- tbl_df(emi_json_data) %>% select("Year", "Fuel Type", "Transportation", "Electricity Generation", "Residential", "Commercial", "Industrial", "Total CO2 Emissions", "Percent of Total CO2 Emissions")
+
+```
+## Prepare emissions data
+Now we will replace missing values to 0 in numeric data and also change the data types of these columns to numeric. Additonally, we will convert the categorical columns to factors. 
+
+```{r prep_JSON_data}
+#CREATE A FUNCTION THAT WILL REPLACE N/A TO 0 AND ALSO CONVERT THAT COLUMN TO NUMERIC
+rep_na_make_numeric <- function(col){
+  emi_json_data_1[[col]][emi_json_data_1[[col]]=="N/A"] <- 0
+  emi_json_data_1[[col]]<- as.numeric(emi_json_data_1[[col]])
+  assign('emi_json_data_1',emi_json_data_1,envir=.GlobalEnv)
+}
+
+#CALL THIS FUNCTION FOR ALL NUMERIC VARIABLES
+rep_na_make_numeric(col="Transportation")
+rep_na_make_numeric(col="Electricity Generation")
+rep_na_make_numeric(col="Residential")
+rep_na_make_numeric(col="Commercial")
+rep_na_make_numeric(col="Industrial")
+rep_na_make_numeric(col="Total CO2 Emissions")
+rep_na_make_numeric(col="Percent of Total CO2 Emissions")
+
+#CATEGORICAL VARIABLES MUST BE CONVERTED TO FACTORS
+emi_json_data_1$"Year"<- as.factor(emi_json_data_1$"Year")
+emi_json_data_1$"Fuel Type"<- as.factor(emi_json_data_1$"Fuel Type")
+
+#A LOOK AT THE DATA
+kable(head(emi_json_data_1), caption = "Sample rows from Greenhouse Gas emissions data for NY")
 ```
 
-## Including Plots
+## Exploratory Data Analysis
+CO2 emissions come from various sources like Transportation", "Electricity Generation", "Residential", "Commercial", "Industrial", "Total CO2 Emissions", "Percent of Total CO2 Emissions. 
 
-You can also embed plots, for example:
+### 1. Contingency table 
+The following contingency table shows a list of these sources and years for which we have data. 
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r eda1}
+# DRAW CONTINGENCY TABLES 
+table(emi_json_data_1$`Fuel Type`, emi_json_data_1$Year)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+This dataset has Co2 emissions from all these sources from year 2010 to 2016. 
+
+### 2. Box plots numeric summary 
+We want to see numeric summary for each of these sources. For this, we plot box plots.  
+
+```{r eda2}
+# CONVER TO A VERTICAL FORMAT 
+emi_json_data_5<- emi_json_data_1 %>% 
+  gather(`Fuel Type`, value, "Transportation", "Electricity Generation", "Residential", "Commercial", "Industrial", "Total CO2 Emissions", "Percent of Total CO2 Emissions" ) 
+# DRAW BOX PLOTS 
+emi_json_data_5 %>% 
+  ggplot(aes(x = `Fuel Type`, y = value, fill = `Fuel Type`))+
+  geom_boxplot()+
+  facet_wrap(~`Fuel Type`)+ 
+  labs(x="")
+```
+
+### 3. Summary scatter plots 
+Now we want to see the total CO2 Emissions for each year for each fuel type or sources. We will draw a scatter plot. 
+
+```{r eda3}
+#PLOTTING TOTAL CO2 EMISSIONS 
+g<- ggplot(data=emi_json_data_1, aes(x=Year, y=emi_json_data_1$`Total CO2 Emissions`, group=emi_json_data_1$`Fuel Type`))
+g + geom_point(aes(color=emi_json_data_1$`Fuel Type`)) + labs(y="Total CO2 emissions", title="Yearly Total emissions") + theme(legend.title = element_blank())
+```
+
+### 4. Summary Scatter plots 2
+We want to analyze the direct emissions from common population versus industrial causes. We create 2 new variables "total residential" that contains emissions from normal population (Transportation and Residential). The remaining sources are summed into total commerical. A scatter plot of this data is below. 
+```{r eda4}
+# CREATE NEW VARIABLES FOR RESIDENTIAL VS COMMERCIAL 
+emi_json_data_2 <- 
+    mutate(emi_json_data_1, total_res = Transportation+Residential, total_com=`Electricity Generation`+Commercial+Industrial) %>% 
+    group_by(Year) %>% 
+    summarise(all_res=sum(total_res), all_com=sum(total_com))
+
+# PLOT RESIDENTIAL AND COMMERCIAL TO COMPARE THEM
+ggplot(emi_json_data_2, aes(x=Year, y = value, color = variable)) + 
+  geom_point(aes(y = all_res, col = "all_res")) + 
+  geom_point(aes(y = all_com, col = "all_com")) + 
+  labs(y="Emissions", title="Residential Vs Commercial") + 
+  theme(legend.title = element_blank())
+```
+This scatter plot clearly shows that the commercial emissions have reduced significantly over the years but residential emissions have been in the same range. 
+
+### 5. Bar plots
+We also see the similar behaviour in box plots below. 
+
+```{r eda5}
+
+#DO BAR PLOTS
+emi_json_data_3 <- gather(emi_json_data_2, type, total, all_res:all_com) 
+
+plot <- ggplot(emi_json_data_3, aes(x=Year, total, fill=type))
+plot <- plot + geom_bar(stat = "identity", position = 'dodge') + labs(y="Emissions", title="Residential Vs Commercial") +
+  theme(legend.title = element_blank())
+plot
+```
+
+
