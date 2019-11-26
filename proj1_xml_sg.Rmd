@@ -1,0 +1,174 @@
+---
+title: "Project 2 Sushil Gupta XML"
+author: "Sushil Gupta"
+date: "11/26/2019"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(knitr)
+library(dplyr)
+library(tidyr)
+library(XML)
+library(methods)
+setwd("C:\\Users\\sugupt\\OneDrive - SAS\\00 sas sushil\\personal\\00_SushilGupta\\MasterStats_sg\\201908_ST_558_DataScienceForStatistician\\Project1")
+```
+
+# Project 1 - XML data for 2005 - 2015 Graduation Outcomes 
+
+This XML dataset consists of graduation results for all students by year i.e. cohorts of 2001 through 2011 (Classes of 2005 through 2015). These Graduation Outcomes are as Calculated by the New York State Education Department. The New York State calculation method was first adopted for the Cohort of 2001 (Class of 2005). The cohort consists of all students who first entered 9th grade in a given school year (e.g., the Cohort of 2006 entered 9th grade in the 2006-2007 school year). 
+
+Following manipulations were already done on data: 
+
+  *  In order to comply with FERPA regulations on public reporting of education outcomes, rows with a cohort of 20 or fewer students are suppressed. 
+  *  Due to the small number of students identified as Native American or Multi-Racial, these ethnicities are not reported on the Ethnicity tab; however, these students are included in the counts on all other tabs. 
+  *  4 Year August outcomes are available for the 2004-2011 cohorts at the citywide level and for the 2005-2011 cohorts at the borough, district and school level. 5 Year August outcomes are available for the 2006-2010 cohorts. 
+  *  Cells are blank when data is not available. 
+  *  Charter schools are not included in the NYSED calculation of graduation rates for NYC. School level results are not presented for District 79 and District 75 schools, but their outcomes are included in citywide totals.  
+
+The data was obtained from [*this website*](https://catalog.data.gov/dataset/regents-exam-results).
+
+## What is XML data?
+XML stands for Extensible Markup Language (XML) and it is used to describe data. The XML standard is a **flexible** way to create information formats and **electronically share structured data via public Internet**, as well as via corporate networks.
+
+It is similar to Hypertext Markup Language (HTML). Both XML and HTML contain markup symbols to describe page or file contents. HTML code describes Web page content (mainly text and graphic images) only in terms of how it is to be displayed and interacted with.
+
+XML data is known as self-describing or **self-defining**, meaning that the structure of the data is embedded with the data, thus when the data arrives there is no need to pre-build the structure to store the data; it is dynamically understood within the XML. The XML format can be used by any individual or group of individuals or companies that want to share information in a consistent way. 
+
+The basic building block of an XML document is an element, defined by tags. An element has a beginning and an ending tag. All elements in an XML document are contained in an outermost element known as the root element. XML can also support nested elements, or elements within elements. This ability allows XML to support hierarchical structures. Element names describe the content of the element, and the structure describes the relationship between the elements.
+
+An XML document is considered to be **"well formed"** (that is, able to be read and understood by an XML parser) if its format complies with the XML specification, if it is properly marked up, and if elements are properly nested. XML also supports the ability to define attributes for elements and describe characteristics of the elements in the beginning tag of an element.
+
+For more information on XML format, please go through the [wikipedia page](https://en.wikipedia.org/wiki/XML). 
+
+## R Packages to read XML data
+The main package to read XML data in R is package XML. The parsing of XML files depends on the structure of the file and we *first need to understand the structure* before we read it. Package XML has relevent functions that help us understand the structure. Since package XML has variety of functions that help us understand the format and also read data, we decided to use this package. We will use the following main functions:  
+
+  *  xmlParse - Parses an XML or HTML file or string containing XML/HTML content, and generates an R structure representing the XML/HTML tree. 
+  *  xmlRoot - Gives us easy access to the top-level XMLNode object resulting from parsing an XML document.
+  *  xmlSize - Gives us record counts in the data nodes
+  *  xmlToDataFrame - this is the main function to convert the XML data into a dataframe. we have to pass an appropriate rootnode to get dataframe. 
+
+For more information on XML package in R, please go through the [CRAN documentation](https://cran.r-project.org/web/packages/XML/XML.pdf). 
+
+## Read graduation results data - XML
+
+```{r readxml}
+doc <- xmlParse("C:\\Users\\sugupt\\OneDrive - SAS\\00 sas sushil\\personal\\00_SushilGupta\\MasterStats_sg\\201908_ST_558_DataScienceForStatistician\\Project1\\rows_students.xml")  
+rootnode <- xmlRoot(doc)
+xmlSize(rootnode[[1]])
+xmldf <-xmlToDataFrame(rootnode[[1]])
+
+#SELECT ANALYSIS COLUMNS 
+xmldf<-select(xmldf, "cohort_year", "cohort_category", "demographic", "total_cohort", "total_grads", "still_enrolled", "dropped_out")
+
+# CONVERT CATEGORICAL COLUMNS TO FACTORS 
+xmldf$cohort_year <- as.factor(xmldf$cohort_year)
+xmldf$cohort_category <- as.factor(xmldf$cohort_category)
+xmldf$demographic <- as.factor(xmldf$demographic)
+
+
+# CONVERT NUMERIC COLUMNS TO NUMERIC DATATYPE
+xmldf$total_cohort <- as.numeric(xmldf$total_cohort)
+xmldf$total_grads <- as.numeric(xmldf$total_grads)
+xmldf$still_enrolled <- as.numeric(xmldf$still_enrolled)
+xmldf$dropped_out <- as.numeric(xmldf$dropped_out)
+
+# CHECK IF WE HAVE ANY MISSING VALUES
+anyNA(xmldf)
+```
+
+
+```{r contble}
+# CONTINGENCY TABLE
+kable(table(xmldf$cohort_year, xmldf$cohort_category), caption = "Contingency table for cohorts and category")
+
+```
+This table shows that we may have some missing data for 2011. It is possible that some of this data has not come in. 
+
+```{r numsum}
+#NUMERIC SUMMARIES 
+num_cols<-c("total_cohort", "total_grads", "still_enrolled", "dropped_out")
+select(xmldf, num_cols) %>% summary()
+
+# BOX PLOTS 
+boxplot(xmldf[,num_cols])
+```
+The numeric summary shows that numeric variables are reasonaly well distributed. Total_cohort and total_grads are well distributed while still_enrolled and dropped_out may have outliers. Since our analysis will predominently involve the former, we do not need to do anything more here. 
+
+## More Visual Summary 
+In this section, we want to evaluate some more using scatter plots. For this, we will create a function that will create a scatter plot of a numeric column Y axis and a categorical column on X Axis. The function does the following: 
+
+  *  performs necessary validations on columns. They should exist in dataset and should be of certain datatypes 
+  *  creates summary on categorical variable 
+  *  uses ggplot to draw graph
+
+```{r funfun}
+#FUNCTION FOR PLOTTING AGGREGATED SUMMARIES
+
+plot_agg_summary <- function(agg_col, agg_col_num){
+  
+  col1 <- deparse(substitute(agg_col))
+  col2 <- deparse(substitute(agg_col_num))
+  
+  #VALIDATIONS - CATEGORICAL COLUMN SHOULD BE A FACTOR AND NUMERIC COLUMN SHOULD BE NUMERIC. THEY SHOULD EXIST IN DATASET. 
+  if(!col1 %in% colnames(xmldf)){stop(paste(col1, "does not exist"))}
+  if(!col2 %in% colnames(xmldf)){stop(paste(col2, "does not exist"))}
+  if(!is.factor(xmldf[[col1]])){stop(paste(col1, "should be a factor"))}
+  if(!is.numeric(xmldf[[col2]])){stop(paste(col2, "should be a factor"))}
+  
+  tmpxmldf <- select(xmldf, col1, col2) 
+  
+  colnames(tmpxmldf)<-c("col1", "col2")
+  
+  #CREATE SUMMARY 
+  tmpxmldf <- tmpxmldf %>% 
+    group_by(col1) %>%   summarise(col2=sum(col2))
+  
+  colnames(tmpxmldf)<-c("col1", "col2")
+  
+  #PLOT GRAPH USING GGPLOT
+  ggplot(tmpxmldf, aes(x=col1, y = col2)) + 
+    geom_point(aes(y = col2)) +   
+    labs(x=col1, y=col2,  title=paste(col2, " by ", col1))
+}
+```
+Now we call these functions 
+```{r callfun}
+plot_agg_summary(cohort_year, total_cohort)
+plot_agg_summary(cohort_category, total_cohort)
+```
+
+total_cohort seem to have decreased in 2011 and 2010. This potentially seem like a data collection issue and should be looked further. total_cohort by category seem to be reasonably random. 
+
+## Graduating Vs Non graduating
+We want to see if the pattern on graduating vs non graduating is changing over years. For that, we create a new variable called not_grads (difference of total_cohort and total_grads). We then create a side by side bar plot. 
+
+```{r barplt}
+#BAR PLOT OF TOTAL GRADS VS NOT GRADS 
+xmldf_bar<-
+  xmldf %>% 
+  select("cohort_year", "total_cohort", "total_grads") %>%  
+  group_by(cohort_year) %>% 
+  summarise(total_cohort=sum(total_cohort), total_grads=sum(total_grads)) %>% 
+  mutate(not_grads=total_cohort-total_grads) %>% 
+  select(-"total_cohort")
+
+xmldf_bar <- gather(xmldf_bar, type, total, total_grads:not_grads)
+plot <- ggplot(xmldf_bar, aes(x=cohort_year, total, fill=type))
+plot <- plot + geom_bar(stat = "identity", position = 'dodge')
+plot
+
+```
+
+Again, 2010 and 2011 data looks suspecious but other then that, we see that grads have increased compared to non grads which is a good sign. 
+
+## Conclusions
+Overall, with our limited analysis, we can conclude that the state of New York Education department has made good progress. However, we did notice that there may be some anamolies on data collection process and that too in the most recent periods which are more sensitive on our analysis. We need to look more into this and also we can do some time-series based analysis to consolidate our initial findings.  
+
+
